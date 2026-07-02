@@ -13,8 +13,21 @@ import {
   Download,
   CheckCircle2,
   AlertCircle,
-  RefreshCcw
+  RefreshCcw,
+  FolderOpen,
+  ChevronRight,
+  MoreVertical,
+  X
 } from 'lucide-react';
+
+interface Workbook {
+  id: string;
+  name: string;
+  prodEntries: any[];
+  attEntries: any[];
+  selectedProdEmpCodes: string[];
+  lastModified: number;
+}
 import { store } from '../lib/store';
 import { Product, Employee, ProductionRecord, Attendance } from '../types';
 import { cn } from '../lib/utils';
@@ -25,9 +38,118 @@ type SheetType = 'master' | 'production' | 'attendance' | 'payroll';
 export function ExcelView() {
   const [activeSheet, setActiveSheet] = useState<SheetType>('production');
   
+  // Folders (Workbooks) Logic
+  const [workbooks, setWorkbooks] = useState<Workbook[]>(() => {
+    const saved = localStorage.getItem('norma_excel_workbooks');
+    if (saved) return JSON.parse(saved);
+    return [{
+      id: 'default',
+      name: 'Asosiy Hujjat',
+      prodEntries: Array.from({ length: 50 }, () => ({ prodCode: '', amount: '' })),
+      attEntries: Array.from({ length: 30 }, () => ({ empCode: '', status: 'PRESENT' })),
+      selectedProdEmpCodes: [],
+      lastModified: Date.now()
+    }];
+  });
+  const [activeWorkbookId, setActiveWorkbookId] = useState(() => {
+    return localStorage.getItem('norma_excel_active_workbook') || 'default';
+  });
+
+  const activeWorkbook = workbooks.find(w => w.id === activeWorkbookId) || workbooks[0];
+
+  // Sync state with active workbook
+  const [prodEntries, setProdEntries] = useState(activeWorkbook.prodEntries);
+  const [attEntries, setAttEntries] = useState(activeWorkbook.attEntries);
+  const [selectedProdEmpCodes, setSelectedProdEmpCodes] = useState(activeWorkbook.selectedProdEmpCodes);
+
+  useEffect(() => {
+    localStorage.setItem('norma_excel_workbooks', JSON.stringify(workbooks));
+  }, [workbooks]);
+
+  useEffect(() => {
+    localStorage.setItem('norma_excel_active_workbook', activeWorkbookId);
+  }, [activeWorkbookId]);
+
+  // Update current workbook data when local states change
+  useEffect(() => {
+    setWorkbooks(prev => prev.map(w => {
+      if (w.id === activeWorkbookId) {
+        return { ...w, prodEntries, attEntries, selectedProdEmpCodes, lastModified: Date.now() };
+      }
+      return w;
+    }));
+  }, [prodEntries, attEntries, selectedProdEmpCodes, activeWorkbookId]);
+
+  // Switch workbook
+  const handleSwitchWorkbook = (id: string) => {
+    const wb = workbooks.find(w => w.id === id);
+    if (wb) {
+      setActiveWorkbookId(id);
+      setProdEntries(wb.prodEntries);
+      setAttEntries(wb.attEntries);
+      setSelectedProdEmpCodes(wb.selectedProdEmpCodes);
+    }
+  };
+
+  const createWorkbook = () => {
+    const name = prompt('Papka nomi:');
+    if (!name) return;
+    const newWb: Workbook = {
+      id: Math.random().toString(36).substr(2, 9),
+      name,
+      prodEntries: Array.from({ length: 50 }, () => ({ prodCode: '', amount: '' })),
+      attEntries: Array.from({ length: 30 }, () => ({ empCode: '', status: 'PRESENT' })),
+      selectedProdEmpCodes: [],
+      lastModified: Date.now()
+    };
+    setWorkbooks([...workbooks, newWb]);
+    handleSwitchWorkbook(newWb.id);
+  };
+
+  const deleteWorkbook = (id: string) => {
+    if (id === 'default') return alert('Asosiy hujjatni o\'chirib bo\'lmaydi');
+    if (confirm('Ushbu papkani o\'chirmoqchimisiz?')) {
+      const filtered = workbooks.filter(w => w.id !== id);
+      setWorkbooks(filtered);
+      if (activeWorkbookId === id) {
+        handleSwitchWorkbook('default');
+      }
+    }
+  };
+
   // Sheet 1: Master Data (Employees & Products)
-  const [masterEmployees, setMasterEmployees] = useState(store.getEmployees() || []);
-  const [masterProducts, setMasterProducts] = useState(store.getProducts() || []);
+  const [masterEmployees, setMasterEmployees] = useState(() => store.getEmployees());
+  const [masterProducts, setMasterProducts] = useState(() => store.getProducts());
+
+  // Logic to add employee
+  const handleAddEmployee = (code: string) => {
+    if (!code) return;
+    const name = prompt('Xodim ismini kiriting:');
+    if (!name) return;
+    
+    store.addEmployee({
+      code,
+      name,
+      commissionPercent: 0
+    });
+    setMasterEmployees([...store.getEmployees()]);
+  };
+
+  // Logic to add product
+  const handleAddProduct = (code: string) => {
+    if (!code) return;
+    const name = prompt('Mahsulot nomini kiriting:');
+    if (!name) return;
+    const priceStr = prompt('Narxini kiriting:');
+    const price = Number(priceStr) || 0;
+
+    store.addProduct({
+      code,
+      name,
+      price
+    });
+    setMasterProducts([...store.getProducts()]);
+  };
 
   useEffect(() => {
     if (activeSheet === 'master') {
@@ -38,35 +160,28 @@ export function ExcelView() {
 
   // Sheet 2: Production (Daily)
   const [productionDate, setProductionDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedProdEmpCodes, setSelectedProdEmpCodes] = useState<string[]>([]);
-  const [prodEntries, setProdEntries] = useState<{ 
-    prodCode: string, 
-    amount: string,
-    prodName?: string,
-    price?: number 
-  }[]>(() => {
-    const saved = localStorage.getItem('norma_excel_draft_prod_v2');
-    return saved ? JSON.parse(saved) : Array.from({ length: 50 }, () => ({ prodCode: '', amount: '' }));
-  });
-
-  useEffect(() => {
-    localStorage.setItem('norma_excel_draft_prod_v2', JSON.stringify(prodEntries));
-  }, [prodEntries]);
-
-  // Sheet 3: Attendance
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
-  const [attEntries, setAttEntries] = useState<{
-    empCode: string,
-    empName?: string,
-    status: 'PRESENT' | 'ABSENT'
-  }[]>(() => {
-    const saved = localStorage.getItem('norma_excel_draft_att');
-    return saved ? JSON.parse(saved) : Array.from({ length: 30 }, () => ({ empCode: '', status: 'PRESENT' }));
-  });
 
-  useEffect(() => {
-    localStorage.setItem('norma_excel_draft_att', JSON.stringify(attEntries));
-  }, [attEntries]);
+  // Grid Navigation Logic
+  const handleKeyDown = (e: React.KeyboardEvent, row: number, col: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const nextId = `cell-${activeSheet}-${row + 1}-${col}`;
+      const element = document.getElementById(nextId);
+      if (element) {
+        (element as HTMLInputElement).focus();
+      }
+    }
+    // Arrows
+    if (e.key === 'ArrowDown') {
+      const nextId = `cell-${activeSheet}-${row + 1}-${col}`;
+      document.getElementById(nextId)?.focus();
+    }
+    if (e.key === 'ArrowUp' && row > 0) {
+      const prevId = `cell-${activeSheet}-${row - 1}-${col}`;
+      document.getElementById(prevId)?.focus();
+    }
+  };
 
   // Sheet 4: Payroll Report
   const [payrollRange, setPayrollRange] = useState({ start: '', end: '' });
@@ -85,11 +200,12 @@ export function ExcelView() {
     }
     
     newEntries[index] = entry;
-    setProdEntries(newEntries);
 
-    // Infinite rows
+    // Infinite rows: If we type in the last row, add 10 more
     if (index === prodEntries.length - 1 && value !== '') {
       setProdEntries([...newEntries, ...Array.from({ length: 10 }, () => ({ prodCode: '', amount: '' }))]);
+    } else {
+      setProdEntries(newEntries);
     }
   };
 
@@ -255,78 +371,151 @@ export function ExcelView() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] bg-gray-100 rounded-2xl overflow-hidden border border-gray-200 shadow-2xl">
-      {/* Excel Toolbar */}
-      <div className="bg-white border-b border-gray-200 p-2 flex items-center gap-4 shrink-0">
-        <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 rounded text-emerald-700">
-          <FileSpreadsheet className="w-5 h-5" />
-          <span className="text-sm font-bold">NormaAI Spreadsheet</span>
+    <div className="flex flex-col h-full gap-2 p-2 sm:gap-4 sm:p-4 bg-gray-50">
+      {/* Workbook / Folder Bar */}
+      <div className="bg-white border border-gray-200 px-3 py-1.5 sm:px-4 sm:py-2 flex items-center gap-2 overflow-x-auto shrink-0 scrollbar-hide rounded-xl sm:rounded-2xl shadow-sm">
+        <div className="flex items-center gap-2 pr-3 sm:pr-4 border-r border-gray-200">
+          <FolderOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
+          <span className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Papkalar:</span>
+        </div>
+        {workbooks.map(wb => (
+          <div 
+            key={wb.id}
+            className={cn(
+              "group relative flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all cursor-pointer whitespace-nowrap",
+              activeWorkbookId === wb.id 
+                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" 
+                : "text-gray-500 hover:bg-gray-50"
+            )}
+            onClick={() => handleSwitchWorkbook(wb.id)}
+          >
+            {wb.name}
+            {wb.id !== 'default' && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); deleteWorkbook(wb.id); }}
+                className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-all ml-1"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        ))}
+        <button 
+          onClick={createWorkbook}
+          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all ml-2"
+          title="Yangi papka"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="flex-1 flex flex-col bg-white rounded-xl sm:rounded-2xl overflow-hidden border border-gray-200 shadow-2xl">
+        {/* Excel Toolbar */}
+      <div className="bg-white border-b border-gray-200 p-1.5 sm:p-2 flex flex-wrap items-center gap-2 sm:gap-4 shrink-0">
+        <div className="flex items-center gap-2 px-2 py-1 sm:px-3 sm:py-1 bg-emerald-50 rounded text-emerald-700">
+          <FileSpreadsheet className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="text-[10px] sm:text-sm font-bold truncate max-w-[100px] sm:max-w-[200px]">{activeWorkbook.name}</span>
         </div>
 
-        <button 
-          onClick={exportToCSV}
-          className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded text-sm font-bold transition-all"
-        >
-          <Download className="w-4 h-4" />
-          Eksport (CSV)
-        </button>
-        
-        {activeSheet === 'production' && (
-          <div className="flex items-center gap-3 ml-auto">
-            <input 
-              type="date" 
-              className="px-3 py-1 bg-gray-50 border border-gray-200 rounded text-sm font-bold outline-none focus:ring-1 focus:ring-emerald-500"
-              value={productionDate}
-              onChange={(e) => setProductionDate(e.target.value)}
-            />
-            <button 
-              onClick={clearProductionSheet}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 rounded font-bold text-sm hover:bg-gray-200 transition-all"
-            >
-              <RefreshCcw className="w-4 h-4" />
-              Tozalash
-            </button>
-            <button 
-              onClick={saveProduction}
-              className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 text-white rounded font-bold text-sm hover:bg-emerald-700 transition-all shadow-sm"
-            >
-              <Save className="w-4 h-4" />
-              Saqlash (Tarixga qo'shish)
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-1 sm:gap-2">
+          <button 
+            onClick={() => setActiveSheet('master')}
+            className={cn(
+              "px-2 py-1 sm:px-3 sm:py-1 rounded text-[10px] sm:text-xs font-bold transition-all",
+              activeSheet === 'master' ? "bg-emerald-600 text-white shadow-sm" : "hover:bg-gray-100 text-gray-500"
+            )}
+          >
+            Baza
+          </button>
+          <button 
+            onClick={() => setActiveSheet('production')}
+            className={cn(
+              "px-2 py-1 sm:px-3 sm:py-1 rounded text-[10px] sm:text-xs font-bold transition-all",
+              activeSheet === 'production' ? "bg-emerald-600 text-white shadow-sm" : "hover:bg-gray-100 text-gray-500"
+            )}
+          >
+            Ish
+          </button>
+          <button 
+            onClick={() => setActiveSheet('attendance')}
+            className={cn(
+              "px-2 py-1 sm:px-3 sm:py-1 rounded text-[10px] sm:text-xs font-bold transition-all",
+              activeSheet === 'attendance' ? "bg-emerald-600 text-white shadow-sm" : "hover:bg-gray-100 text-gray-500"
+            )}
+          >
+            Davomat
+          </button>
+          <button 
+            onClick={() => setActiveSheet('payroll')}
+            className={cn(
+              "px-2 py-1 sm:px-3 sm:py-1 rounded text-[10px] sm:text-xs font-bold transition-all",
+              activeSheet === 'payroll' ? "bg-emerald-600 text-white shadow-sm" : "hover:bg-gray-100 text-gray-500"
+            )}
+          >
+            Oylik
+          </button>
+        </div>
 
-        {activeSheet === 'attendance' && (
-          <div className="flex items-center gap-3 ml-auto">
-            <input 
-              type="date" 
-              className="px-3 py-1 bg-gray-50 border border-gray-200 rounded text-sm font-bold outline-none"
-              value={attendanceDate}
-              onChange={(e) => setAttendanceDate(e.target.value)}
-            />
-            <button 
-              onClick={saveAttendance}
-              className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 text-white rounded font-bold text-sm hover:bg-emerald-700"
-            >
-              <Save className="w-4 h-4" />
-              Davomatni Saqlash
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 ml-auto">
+          {activeSheet === 'production' && (
+            <div className="flex items-center gap-1 sm:gap-2">
+              <input 
+                type="date" 
+                className="px-1 py-1 sm:px-2 sm:py-1 border border-gray-200 rounded text-[10px] sm:text-xs outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-gray-50"
+                value={productionDate}
+                onChange={(e) => setProductionDate(e.target.value)}
+              />
+              <button 
+                onClick={saveProduction}
+                className="flex items-center gap-1 px-2 py-1 sm:px-4 sm:py-1.5 bg-emerald-600 text-white rounded font-bold text-[10px] sm:text-sm hover:bg-emerald-700 transition-all shadow-sm"
+              >
+                <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                OK
+              </button>
+            </div>
+          )}
+          {activeSheet === 'attendance' && (
+            <div className="flex items-center gap-1 sm:gap-2">
+              <input 
+                type="date" 
+                className="px-1 py-1 sm:px-2 sm:py-1 border border-gray-200 rounded text-[10px] sm:text-xs outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-gray-50"
+                value={attendanceDate}
+                onChange={(e) => setAttendanceDate(e.target.value)}
+              />
+              <button 
+                onClick={saveAttendance}
+                className="flex items-center gap-1 px-2 py-1 sm:px-4 sm:py-1.5 bg-emerald-600 text-white rounded font-bold text-[10px] sm:text-sm hover:bg-emerald-700 transition-all shadow-sm"
+              >
+                <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                OK
+              </button>
+            </div>
+          )}
+          <button 
+            onClick={exportToCSV}
+            className="p-1 sm:p-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-all"
+            title="Excelga eksport"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Main Grid Area */}
       <div className="flex-1 overflow-auto bg-white">
         {activeSheet === 'master' && (
-          <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 h-full overflow-auto">
             <section>
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Users className="w-5 h-5 text-emerald-600" />
-                Xodimlar (Kod va Ism)
+              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-emerald-600" />
+                  Xodimlar (Kod va Ism)
+                </div>
+                <span className="text-[10px] text-gray-400 font-normal">Pastki qatorda yangi xodim qo'shing</span>
               </h3>
               <table className="w-full border-collapse border border-gray-200 text-sm">
-                <thead>
-                  <tr className="bg-gray-50">
+                <thead className="sticky top-0 bg-gray-50">
+                  <tr>
                     <th className="border border-gray-200 px-3 py-2 w-16">Kod</th>
                     <th className="border border-gray-200 px-3 py-2 text-left">Xodim ismi</th>
                     <th className="border border-gray-200 px-3 py-2 w-20">Ulush %</th>
@@ -335,23 +524,43 @@ export function ExcelView() {
                 <tbody>
                   {masterEmployees.map(emp => (
                     <tr key={emp.id}>
-                      <td className="border border-gray-200 px-3 py-2 text-center font-bold text-emerald-600">{emp.code || '-'}</td>
-                      <td className="border border-gray-200 px-3 py-2 font-medium">{emp.name || '-'}</td>
-                      <td className="border border-gray-200 px-3 py-2 text-center">{emp.commissionPercent || 0}</td>
+                      <td className="border border-gray-200 px-3 py-2 text-center font-bold text-emerald-600 bg-gray-50/30">{emp.code}</td>
+                      <td className="border border-gray-200 px-3 py-2 font-medium">{emp.name}</td>
+                      <td className="border border-gray-200 px-3 py-2 text-center">{emp.commissionPercent}%</td>
                     </tr>
                   ))}
+                  {/* Quick Add Row */}
+                  <tr className="bg-emerald-50/20">
+                    <td className="border border-gray-200 p-0">
+                      <input 
+                        placeholder="Yangi..."
+                        className="w-full px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-500 font-bold text-center bg-white"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleAddEmployee(e.currentTarget.value);
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                      />
+                    </td>
+                    <td className="border border-gray-200 px-3 py-2 text-gray-400 italic text-xs">Enter bosing...</td>
+                    <td className="border border-gray-200 px-3 py-2 bg-gray-50"></td>
+                  </tr>
                 </tbody>
               </table>
             </section>
 
             <section>
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Package className="w-5 h-5 text-emerald-600" />
-                Maxsulotlar (Kod va Narx)
+              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Package className="w-5 h-5 text-emerald-600" />
+                  Maxsulotlar (Kod va Narx)
+                </div>
+                <span className="text-[10px] text-gray-400 font-normal">Pastki qatorda yangi mahsulot qo'shing</span>
               </h3>
               <table className="w-full border-collapse border border-gray-200 text-sm">
-                <thead>
-                  <tr className="bg-gray-50">
+                <thead className="sticky top-0 bg-gray-50">
+                  <tr>
                     <th className="border border-gray-200 px-3 py-2 w-16">Kod</th>
                     <th className="border border-gray-200 px-3 py-2 text-left">Maxsulot nomi</th>
                     <th className="border border-gray-200 px-3 py-2 text-right">Narxi</th>
@@ -360,11 +569,28 @@ export function ExcelView() {
                 <tbody>
                   {masterProducts.map(prod => (
                     <tr key={prod.id}>
-                      <td className="border border-gray-200 px-3 py-2 text-center font-bold text-emerald-600">{prod.code || '-'}</td>
-                      <td className="border border-gray-200 px-3 py-2 font-medium">{prod.name || '-'}</td>
-                      <td className="border border-gray-200 px-3 py-2 text-right font-bold">{(prod.price || 0).toLocaleString()} so'm</td>
+                      <td className="border border-gray-200 px-3 py-2 text-center font-bold text-emerald-600 bg-gray-50/30">{prod.code}</td>
+                      <td className="border border-gray-200 px-3 py-2 font-medium">{prod.name}</td>
+                      <td className="border border-gray-200 px-3 py-2 text-right font-bold">{(prod.price || 0).toLocaleString()}</td>
                     </tr>
                   ))}
+                  {/* Quick Add Row */}
+                  <tr className="bg-emerald-50/20">
+                    <td className="border border-gray-200 p-0">
+                      <input 
+                        placeholder="Yangi..."
+                        className="w-full px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-500 font-bold text-center bg-white"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleAddProduct(e.currentTarget.value);
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                      />
+                    </td>
+                    <td className="border border-gray-200 px-3 py-2 text-gray-400 italic text-xs">Enter bosing...</td>
+                    <td className="border border-gray-200 px-3 py-2 bg-gray-50"></td>
+                  </tr>
                 </tbody>
               </table>
             </section>
@@ -418,10 +644,12 @@ export function ExcelView() {
                       <td className="border border-gray-200 px-4 py-1 text-center bg-gray-50/50 text-gray-400 font-medium">{idx + 1}</td>
                       <td className="border border-gray-200 p-0">
                         <input 
+                          id={`cell-production-${idx}-prodCode`}
                           className="w-full px-4 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500 inset-0 bg-transparent font-bold text-emerald-700 text-center"
                           placeholder="Kod..."
                           value={entry.prodCode}
                           onChange={(e) => updateProdEntry(idx, 'prodCode', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, idx, 'prodCode')}
                         />
                       </td>
                       <td className="border border-gray-200 px-4 py-1.5 text-gray-500 font-medium bg-gray-50/20">{entry.prodName || ''}</td>
@@ -430,11 +658,13 @@ export function ExcelView() {
                       </td>
                       <td className="border border-gray-200 p-0">
                         <input 
+                          id={`cell-production-${idx}-amount`}
                           type="number"
                           className="w-full px-4 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500 inset-0 bg-transparent font-bold text-right"
                           placeholder="0"
                           value={entry.amount}
                           onChange={(e) => updateProdEntry(idx, 'amount', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, idx, 'amount')}
                         />
                       </td>
                     </tr>
@@ -461,9 +691,11 @@ export function ExcelView() {
                   <td className="border border-gray-200 px-4 py-1 text-center bg-gray-50/50 text-gray-400">{idx + 1}</td>
                   <td className="border border-gray-200 p-0">
                     <input 
+                      id={`cell-attendance-${idx}-empCode`}
                       className="w-full px-4 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500 bg-transparent font-bold text-emerald-700 text-center"
                       value={entry.empCode}
                       onChange={(e) => updateAttEntry(idx, 'empCode', e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, idx, 'empCode')}
                     />
                   </td>
                   <td className="border border-gray-200 px-4 py-1.5 text-gray-500 font-medium bg-gray-50/20">{entry.empName || ''}</td>
@@ -604,5 +836,6 @@ export function ExcelView() {
         </button>
       </div>
     </div>
+  </div>
   );
 }

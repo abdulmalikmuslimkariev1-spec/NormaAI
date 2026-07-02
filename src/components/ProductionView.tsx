@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Factory, 
   History as HistoryIcon, 
@@ -9,13 +9,26 @@ import {
   ChevronRight,
   User as UserIcon,
   Info,
-  FlaskConical
+  FlaskConical,
+  BarChart3,
+  TrendingUp,
+  Package
 } from 'lucide-react';
 import { store } from '../lib/store';
 import { ProductionRecord, Product } from '../types';
 import { cn, formatNumber } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { BatchProductionModal } from './BatchProductionModal';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  Cell
+} from 'recharts';
 
 export function ProductionView() {
   const [records, setRecords] = useState(store.getProduction());
@@ -25,6 +38,31 @@ export function ProductionView() {
   const [error, setError] = useState<string | null>(null);
 
   const products = store.getProducts().filter(p => p.isActive);
+
+  // Chart Data calculation
+  const chartData = useMemo(() => {
+    const dailyMap = new Map<string, number>();
+    const sorted = [...records].sort((a, b) => a.date - b.date);
+    
+    sorted.forEach(rec => {
+      const dateStr = new Date(rec.date).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit' });
+      dailyMap.set(dateStr, (dailyMap.get(dateStr) || 0) + rec.amount);
+    });
+
+    return Array.from(dailyMap.entries())
+      .map(([date, amount]) => ({ date, amount }))
+      .slice(-10); // Last 10 entries
+  }, [records]);
+
+  const stats = useMemo(() => {
+    const today = new Date().setHours(0,0,0,0);
+    const todayRecs = records.filter(r => new Date(r.date).setHours(0,0,0,0) === today);
+    return {
+      todayCount: todayRecs.reduce((sum, r) => sum + r.amount, 0),
+      totalCount: records.reduce((sum, r) => sum + r.amount, 0),
+      activeWorkers: new Set(todayRecs.map(r => r.employeeId)).size
+    };
+  }, [records]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +117,94 @@ export function ProductionView() {
             <Factory className="w-5 h-5" />
             Tezkor ishlab chiqarish
           </button>
+        </div>
+      </div>
+
+      {/* Stats and Chart Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-emerald-600" />
+              <h3 className="font-bold text-gray-700">Kunlik ishlab chiqarish hajmi</h3>
+            </div>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">So'nggi 10 kun</span>
+          </div>
+          
+          <div className="h-[240px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey="date" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }}
+                  dy={10}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                    fontWeight: 'bold'
+                  }}
+                />
+                <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
+                  {chartData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={index === chartData.length - 1 ? '#10b981' : '#e2e8f0'} 
+                      className="transition-all duration-300 hover:fill-emerald-400"
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="bg-emerald-600 p-6 rounded-3xl text-white shadow-xl shadow-emerald-600/20">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-white/20 rounded-lg">
+                <TrendingUp className="w-5 h-5 text-white" />
+              </div>
+              <span className="font-bold opacity-80 text-sm">Bugun jami</span>
+            </div>
+            <div className="text-4xl font-black mb-1">{formatNumber(stats.todayCount)}</div>
+            <div className="text-sm font-bold opacity-70">dona mahsulot</div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-blue-50 rounded-2xl">
+                <UserIcon className="w-6 h-6 text-blue-500" />
+              </div>
+              <div>
+                <div className="text-2xl font-black text-gray-800">{stats.activeWorkers}</div>
+                <div className="text-xs font-bold text-gray-400 uppercase">Bugungi ishchilar</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-orange-50 rounded-2xl">
+                <Package className="w-6 h-6 text-orange-500" />
+              </div>
+              <div>
+                <div className="text-2xl font-black text-gray-800">{formatNumber(stats.totalCount)}</div>
+                <div className="text-xs font-bold text-gray-400 uppercase">Umumiy hajm</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

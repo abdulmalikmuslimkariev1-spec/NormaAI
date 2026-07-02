@@ -99,6 +99,17 @@ class NormaStore {
     return saved;
   }
 
+  addEmployee(data: Partial<Employee>): Employee {
+    return this.saveEmployee({
+      id: '',
+      name: '',
+      code: '',
+      commissionPercent: 0,
+      isActive: true,
+      ...data
+    } as Employee);
+  }
+
   getEmployeeByCode(code: string): Employee | undefined {
     return this.getEmployees().find(e => e.code === code && e.isActive);
   }
@@ -171,6 +182,17 @@ class NormaStore {
     this.setData('products', list);
     this.log('PRODUCTS', old ? 'UPDATE' : 'CREATE', old, saved);
     return saved;
+  }
+
+  addProduct(data: Partial<Product>): Product {
+    return this.saveProduct({
+      id: '',
+      name: '',
+      code: '',
+      price: 0,
+      isActive: true,
+      ...data
+    } as Product);
   }
 
   getProductByCode(code: string): Product | undefined {
