@@ -1,0 +1,17 @@
+{
+  "name": "NormaAI Ishbay Hisob",
+  "short_name": "NormaAI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#16A34A",
+  "description": "Ishbay ish haqini hisoblash va ishlab chiqarishni nazorat qilish tizimi",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2942/2942789.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

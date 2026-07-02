@@ -1,0 +1,8 @@
+{
+  "name": "NormaAI Ishbay",
+  "description": "Ishbay ish haqi va ishlab chiqarishni nazorat qilish tizimi. Excel uslubidagi qulay interfeys, davomat va oylik hisobotlari.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
