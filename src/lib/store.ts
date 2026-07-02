@@ -1,8 +1,20 @@
 import { 
-  Ingredient, Product, Recipe, ProductionRecord, 
+  Ingredient, Product, Category, Recipe, ProductionRecord, 
   InventoryTransaction, AuditLog, User, UserRole,
   DashboardStats, Employee, Attendance
 } from '../types';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  deleteDoc, 
+  onSnapshot,
+  query,
+  where,
+  Timestamp,
+  getDocs
+} from 'firebase/firestore';
+import { db } from './firebase';
 
 // Initial Mock Data
 const INITIAL_INGREDIENTS: Ingredient[] = [
@@ -40,6 +52,50 @@ const INITIAL_RECIPES: Recipe[] = [
 ];
 
 class NormaStore {
+  private listeners: Set<() => void> = new Set();
+
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private notify() {
+    this.listeners.forEach(l => l());
+  }
+
+  private async pushToFirebase(collectionName: string, id: string, data: any) {
+    try {
+      await setDoc(doc(db, collectionName, id), { ...data, updatedAt: Date.now() });
+    } catch (e) {
+      console.error(`Error pushing to Firebase (${collectionName}):`, e);
+    }
+  }
+
+  private async removeFromFirebase(collectionName: string, id: string) {
+    try {
+      await deleteDoc(doc(db, collectionName, id));
+    } catch (e) {
+      console.error(`Error removing from Firebase (${collectionName}):`, e);
+    }
+  }
+
+  sync() {
+    const collections = [
+      'ingredients', 'products', 'categories', 'employees', 
+      'recipes', 'production', 'attendance', 'inventory_transactions'
+    ];
+
+    collections.forEach(col => {
+      onSnapshot(collection(db, col), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (data.length > 0) {
+          this.setData(col, data);
+          this.notify(); // Notify all listeners that data changed
+        }
+      });
+    });
+  }
+
   private getData<T>(key: string, initial: T): T {
     try {
       const data = localStorage.getItem(`norma_${key}`);
@@ -95,6 +151,7 @@ class NormaStore {
     }
 
     this.setData('employees', list);
+    this.pushToFirebase('employees', saved.id, saved);
     this.log('EMPLOYEES', old ? 'UPDATE' : 'CREATE', old, saved);
     return saved;
   }
@@ -157,6 +214,7 @@ class NormaStore {
     }
     
     this.setData('ingredients', list);
+    this.pushToFirebase('ingredients', saved.id, saved);
     this.log('INGREDIENTS', old ? 'UPDATE' : 'CREATE', old, saved);
     return saved;
   }
@@ -180,6 +238,7 @@ class NormaStore {
     }
 
     this.setData('products', list);
+    this.pushToFirebase('products', saved.id, saved);
     this.log('PRODUCTS', old ? 'UPDATE' : 'CREATE', old, saved);
     return saved;
   }
@@ -217,6 +276,7 @@ class NormaStore {
     else list.push({ ...recipe, updatedAt: Date.now() });
 
     this.setData('recipes', list);
+    this.pushToFirebase('recipes', recipe.productId, recipe);
     this.log('RECIPES', 'UPDATE', old, recipe);
   }
 
@@ -264,6 +324,16 @@ class NormaStore {
       this.setData('ingredients', ingredients);
     }
     this.setData('production', production);
+    this.pushToFirebase('production', record.id, record);
+    
+    // Push updated ingredients too
+    if (snapshot.length > 0) {
+      ingredients.forEach(ing => {
+        if (snapshot.some(s => s.ingredientId === ing.id)) {
+          this.pushToFirebase('ingredients', ing.id, ing);
+        }
+      });
+    }
     
     // Log transactions
     snapshot.forEach(s => {
@@ -294,6 +364,14 @@ class NormaStore {
     record.status = 'CANCELLED';
     this.setData('ingredients', ingredients);
     this.setData('production', production);
+    this.pushToFirebase('production', record.id, record);
+    
+    // Push updated ingredients
+    record.ingredientsSnapshot.forEach(s => {
+      const ing = ingredients.find(i => i.id === s.ingredientId);
+      if (ing) this.pushToFirebase('ingredients', ing.id, ing);
+    });
+
     this.log('PRODUCTION', 'CANCEL', null, record);
   }
 
@@ -346,6 +424,19 @@ class NormaStore {
     this.setData('ingredients', ingredients);
     this.setData('production', production);
 
+    // Push to Firebase
+    ingredients.forEach(ing => {
+      if (snapshot.some(s => s.ingredientId === ing.id)) {
+        this.pushToFirebase('ingredients', ing.id, ing);
+      }
+    });
+    
+    // We need to push all new production records
+    // This is a bit complex since batch creates multiple. 
+    // I'll just push the last N records where N is employee count.
+    const newRecords = production.slice(-employeeIds.length);
+    newRecords.forEach(rec => this.pushToFirebase('production', rec.id, rec));
+
     // Transactions for history
     snapshot.forEach(s => {
       this.addTransaction(s.ingredientId, 'OUT', s.amountUsed, `Partiya ishlab chiqarish: ${batchId}`);
@@ -372,6 +463,7 @@ class NormaStore {
     const list = this.getTransactions();
     list.push(tx);
     this.setData('transactions', list);
+    this.pushToFirebase('inventory_transactions', tx.id, tx);
     this.log('INVENTORY', type, null, tx);
   }
 
@@ -393,6 +485,71 @@ class NormaStore {
     const logs = this.getLogs();
     logs.push(log);
     this.setData('logs', logs);
+  }
+
+  // Categories
+  getCategories(): Category[] {
+    return this.getData<Category[]>('categories', []);
+  }
+
+  saveCategory(category: Partial<Category>): Category {
+    const categories = this.getCategories();
+    const id = category.id || Math.random().toString(36).substr(2, 9);
+    const index = categories.findIndex(c => c.id === id);
+    let saved: Category;
+
+    if (index >= 0) {
+      categories[index] = { ...categories[index], ...category };
+      saved = categories[index];
+    } else {
+      saved = {
+        id,
+        name: category.name || '',
+        isActive: true,
+        createdAt: Date.now(),
+        ...category
+      };
+      categories.push(saved);
+    }
+
+    this.setData('categories', categories);
+    this.pushToFirebase('categories', saved.id, saved);
+    this.log('SYSTEM', 'SAVE_CATEGORY', null, saved);
+    return saved;
+  }
+
+  deleteCategory(id: string) {
+    const categories = this.getCategories().filter(c => c.id !== id);
+    this.setData('categories', categories);
+    this.removeFromFirebase('categories', id);
+    this.log('SYSTEM', 'DELETE_CATEGORY', id, null);
+  }
+
+  // Auth logic
+  private static readonly AUTH_KEY = 'norma_auth_state';
+  private static readonly PASSWORD_KEY = 'norma_admin_password';
+  private static readonly DEFAULT_PASSWORD = '123456';
+
+  isAuthenticated(): boolean {
+    return localStorage.getItem(NormaStore.AUTH_KEY) === 'true';
+  }
+
+  login(password: string): boolean {
+    const storedPassword = localStorage.getItem(NormaStore.PASSWORD_KEY) || NormaStore.DEFAULT_PASSWORD;
+    if (password === storedPassword) {
+      localStorage.setItem(NormaStore.AUTH_KEY, 'true');
+      return true;
+    }
+    return false;
+  }
+
+  logout() {
+    localStorage.removeItem(NormaStore.AUTH_KEY);
+  }
+
+  changePassword(newPassword: string): void {
+    localStorage.setItem(NormaStore.PASSWORD_KEY, newPassword);
+    this.log('SYSTEM', 'CHANGE_PASSWORD', null, null);
   }
 
   // Dashboard Stats

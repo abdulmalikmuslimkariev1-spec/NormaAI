@@ -1,0 +1,102 @@
+{
+  "collections": [
+    {
+      "collectionId": "ingredients",
+      "description": "Base ingredients and raw materials",
+      "fields": [
+        { "fieldId": "id", "type": "string" },
+        { "fieldId": "name", "type": "string" },
+        { "fieldId": "unit", "type": "string" },
+        { "fieldId": "price", "type": "number" },
+        { "fieldId": "stock", "type": "number" },
+        { "fieldId": "minStock", "type": "number" },
+        { "fieldId": "lastPriceUpdate", "type": "number" },
+        { "fieldId": "isActive", "type": "boolean" },
+        { "fieldId": "createdAt", "type": "number" }
+      ]
+    },
+    {
+      "collectionId": "products",
+      "description": "Finished products",
+      "fields": [
+        { "fieldId": "id", "type": "string" },
+        { "fieldId": "code", "type": "string" },
+        { "fieldId": "name", "type": "string" },
+        { "fieldId": "price", "type": "number" },
+        { "fieldId": "categoryId", "type": "string" },
+        { "fieldId": "description", "type": "string" },
+        { "fieldId": "isActive", "type": "boolean" },
+        { "fieldId": "createdAt", "type": "number" }
+      ]
+    },
+    {
+      "collectionId": "categories",
+      "description": "Product categories",
+      "fields": [
+        { "fieldId": "id", "type": "string" },
+        { "fieldId": "name", "type": "string" },
+        { "fieldId": "isActive", "type": "boolean" },
+        { "fieldId": "createdAt", "type": "number" }
+      ]
+    },
+    {
+      "collectionId": "recipes",
+      "description": "Recipes for products",
+      "fields": [
+        { "fieldId": "productId", "type": "string" },
+        { "fieldId": "updatedAt", "type": "number" },
+        { "fieldId": "items", "type": "array" }
+      ]
+    },
+    {
+      "collectionId": "production",
+      "description": "Production records",
+      "fields": [
+        { "fieldId": "id", "type": "string" },
+        { "fieldId": "productId", "type": "string" },
+        { "fieldId": "employeeId", "type": "string" },
+        { "fieldId": "quantity", "type": "number" },
+        { "fieldId": "date", "type": "number" },
+        { "fieldId": "notes", "type": "string" },
+        { "fieldId": "status", "type": "string" }
+      ]
+    },
+    {
+      "collectionId": "inventory_transactions",
+      "description": "Inventory movement logs",
+      "fields": [
+        { "fieldId": "id", "type": "string" },
+        { "fieldId": "type", "type": "string" },
+        { "fieldId": "ingredientId", "type": "string" },
+        { "fieldId": "quantity", "type": "number" },
+        { "fieldId": "date", "type": "number" },
+        { "fieldId": "reference", "type": "string" }
+      ]
+    },
+    {
+      "collectionId": "employees",
+      "description": "Employee records",
+      "fields": [
+        { "fieldId": "id", "type": "string" },
+        { "fieldId": "name", "type": "string" },
+        { "fieldId": "phone", "type": "string" },
+        { "fieldId": "role", "type": "string" },
+        { "fieldId": "salaryType", "type": "string" },
+        { "fieldId": "salaryRate", "type": "number" },
+        { "fieldId": "isActive", "type": "boolean" },
+        { "fieldId": "createdAt", "type": "number" }
+      ]
+    },
+    {
+      "collectionId": "attendance",
+      "description": "Employee attendance logs",
+      "fields": [
+        { "fieldId": "id", "type": "string" },
+        { "fieldId": "employeeId", "type": "string" },
+        { "fieldId": "date", "type": "string" },
+        { "fieldId": "status", "type": "string" },
+        { "fieldId": "notes", "type": "string" }
+      ]
+    }
+  ]
+}

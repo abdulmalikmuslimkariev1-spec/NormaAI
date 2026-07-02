@@ -19,6 +19,13 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export function IngredientsView() {
   const [ingredients, setIngredients] = useState(store.getIngredients());
+
+  React.useEffect(() => {
+    return store.subscribe(() => {
+      setIngredients(store.getIngredients());
+    });
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<Partial<Ingredient> | null>(null);

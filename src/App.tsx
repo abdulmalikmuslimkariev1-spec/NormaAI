@@ -7,10 +7,23 @@ import { ProductionView } from './components/ProductionView';
 import { InventoryView, HistoryView } from './components/InventoryView';
 import { EmployeesView } from './components/EmployeesView';
 import { ExcelView } from './components/ExcelView';
+import { LoginView } from './components/LoginView';
+import { store } from './lib/store';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isAuthenticated, setIsAuthenticated] = useState(() => store.isAuthenticated());
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      store.sync();
+    }
+  }, [isAuthenticated]);
+
+  if (!isAuthenticated) {
+    return <LoginView onLogin={() => setIsAuthenticated(true)} />;
+  }
 
   const renderContent = () => {
     switch (activeTab) {

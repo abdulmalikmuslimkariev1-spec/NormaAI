@@ -92,7 +92,7 @@ export function ExcelView() {
   };
 
   const createWorkbook = () => {
-    const name = prompt('Papka nomi:');
+    const name = prompt('Yangi papka nomi:', 'Yangi Hujjat');
     if (!name) return;
     const newWb: Workbook = {
       id: Math.random().toString(36).substr(2, 9),
@@ -104,6 +104,15 @@ export function ExcelView() {
     };
     setWorkbooks([...workbooks, newWb]);
     handleSwitchWorkbook(newWb.id);
+  };
+
+  const renameWorkbook = (id: string) => {
+    const wb = workbooks.find(w => w.id === id);
+    if (!wb) return;
+    const newName = prompt('Papkani yangi nomi:', wb.name);
+    if (newName && newName !== wb.name) {
+      setWorkbooks(workbooks.map(w => w.id === id ? { ...w, name: newName } : w));
+    }
   };
 
   const deleteWorkbook = (id: string) => {
@@ -384,38 +393,53 @@ export function ExcelView() {
             className={cn(
               "group relative flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all cursor-pointer whitespace-nowrap",
               activeWorkbookId === wb.id 
-                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" 
+                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 shadow-sm" 
                 : "text-gray-500 hover:bg-gray-50"
             )}
             onClick={() => handleSwitchWorkbook(wb.id)}
+            onDoubleClick={() => renameWorkbook(wb.id)}
           >
             {wb.name}
-            {wb.id !== 'default' && (
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all ml-1">
               <button 
-                onClick={(e) => { e.stopPropagation(); deleteWorkbook(wb.id); }}
-                className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-all ml-1"
+                onClick={(e) => { e.stopPropagation(); renameWorkbook(wb.id); }}
+                className="p-1 hover:text-emerald-600 transition-all"
+                title="Nomini o'zgartirish"
               >
-                <X className="w-3 h-3" />
+                <Settings className="w-3 h-3" />
               </button>
-            )}
+              {wb.id !== 'default' && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); deleteWorkbook(wb.id); }}
+                  className="p-1 hover:text-red-500 transition-all"
+                  title="O'chirish"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           </div>
         ))}
         <button 
           onClick={createWorkbook}
-          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all ml-2"
-          title="Yangi papka"
+          className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all ml-2 text-xs font-bold whitespace-nowrap shadow-md shadow-emerald-100"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-4 h-4" />
+          <span>Qo'shish</span>
         </button>
       </div>
 
       <div className="flex-1 flex flex-col bg-white rounded-xl sm:rounded-2xl overflow-hidden border border-gray-200 shadow-2xl">
         {/* Excel Toolbar */}
       <div className="bg-white border-b border-gray-200 p-1.5 sm:p-2 flex flex-wrap items-center gap-2 sm:gap-4 shrink-0">
-        <div className="flex items-center gap-2 px-2 py-1 sm:px-3 sm:py-1 bg-emerald-50 rounded text-emerald-700">
+        <button 
+          onClick={() => renameWorkbook(activeWorkbook.id)}
+          className="flex items-center gap-2 px-2 py-1 sm:px-3 sm:py-1 bg-emerald-50 rounded text-emerald-700 hover:bg-emerald-100 transition-all group"
+        >
           <FileSpreadsheet className="w-4 h-4 sm:w-5 sm:h-5" />
           <span className="text-[10px] sm:text-sm font-bold truncate max-w-[100px] sm:max-w-[200px]">{activeWorkbook.name}</span>
-        </div>
+          <Settings className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-all" />
+        </button>
 
         <div className="flex items-center gap-1 sm:gap-2">
           <button 

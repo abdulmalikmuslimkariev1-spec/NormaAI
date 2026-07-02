@@ -6,23 +6,57 @@ import {
   Trash2, 
   PlusCircle, 
   X, 
-  Beaker
+  Beaker,
+  FolderOpen,
+  ChevronLeft,
+  MoreVertical,
+  Layers
 } from 'lucide-react';
 import { store } from '../lib/store';
-import { Product, RecipeItem } from '../types';
+import { Product, RecipeItem, Category } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function ProductsView() {
   const [products, setProducts] = useState(store.getProducts());
+  const [categories, setCategories] = useState(store.getCategories());
   const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    return store.subscribe(() => {
+      setProducts(store.getProducts());
+      setCategories(store.getCategories());
+    });
+  }, []);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Partial<Product> | null>(null);
   const [tempRecipeItems, setTempRecipeItems] = useState<RecipeItem[]>([]);
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
 
-  const filtered = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const activeCategory = categories.find(c => c.id === activeCategoryId);
+
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = activeCategoryId ? p.categoryId === activeCategoryId : true;
+    return matchesSearch && matchesCategory;
+  });
+
+  const addCategory = () => {
+    const name = prompt('Yangi kategoriya nomi:');
+    if (name) {
+      store.saveCategory({ name });
+      setCategories(store.getCategories());
+    }
+  };
+
+  const deleteCategory = (id: string) => {
+    if (confirm('Ushbu kategoriyani o\'chirmoqchimisiz? Ichidagi mahsulotlar o\'chmaydi.')) {
+      store.deleteCategory(id);
+      setCategories(store.getCategories());
+      if (activeCategoryId === id) setActiveCategoryId(null);
+    }
+  };
 
   const openModal = (product?: Product) => {
     if (product) {
@@ -34,6 +68,7 @@ export function ProductsView() {
         code: (products.length + 1).toString(),
         name: '', 
         price: 0,
+        categoryId: activeCategoryId || undefined,
         description: '', 
         isActive: true 
       });
@@ -86,90 +121,154 @@ export function ProductsView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Mahsulotlarni qidirish..."
-            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all shadow-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      {/* Header & Categories Navigation */}
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {activeCategoryId && (
+              <button 
+                onClick={() => setActiveCategoryId(null)}
+                className="p-2 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 transition-all shadow-sm"
+              >
+                <ChevronLeft className="w-5 h-5 text-gray-600" />
+              </button>
+            )}
+            <h2 className="text-xl font-black text-slate-800 tracking-tight">
+              {activeCategory ? activeCategory.name : 'Mahsulot Kategoriyalari'}
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={addCategory}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-emerald-100 text-emerald-700 rounded-xl hover:bg-emerald-50 transition-all shadow-sm font-bold text-sm"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Kategoriya
+            </button>
+            <button 
+              onClick={() => openModal()}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#16A34A] text-white rounded-xl hover:bg-[#166534] transition-all shadow-lg shadow-emerald-600/20 font-bold text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Mahsulot
+            </button>
+          </div>
         </div>
-        <button 
-          onClick={() => openModal()}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#16A34A] text-white rounded-xl hover:bg-[#166534] transition-all shadow-lg shadow-emerald-600/20 font-semibold"
-        >
-          <Plus className="w-5 h-5" />
-          Yangi mahsulot
-        </button>
+
+        <div className="flex flex-wrap gap-2">
+          <button 
+            onClick={() => setActiveCategoryId(null)}
+            className={cn(
+              "px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm border",
+              !activeCategoryId 
+                ? "bg-emerald-600 text-white border-emerald-600" 
+                : "bg-white text-gray-600 border-gray-100 hover:bg-gray-50"
+            )}
+          >
+            Barchasi
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategoryId(cat.id)}
+              className={cn(
+                "group px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm border flex items-center gap-2",
+                activeCategoryId === cat.id 
+                  ? "bg-emerald-600 text-white border-emerald-600" 
+                  : "bg-white text-gray-600 border-gray-100 hover:bg-gray-50"
+              )}
+            >
+              {cat.name}
+              <span className="text-[10px] opacity-60">
+                {products.filter(p => p.categoryId === cat.id).length}
+              </span>
+              <X 
+                className="w-3 h-3 hover:text-red-400" 
+                onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id); }}
+              />
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50/50 border-b border-gray-100">
-                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider w-20">Kod</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Mahsulot nomi</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Narx</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Tavsif</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Ingredientlar</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Holat</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Amallar</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.map((product) => {
-                const recipe = store.getRecipe(product.id);
-                return (
-                  <tr key={product.id} className="hover:bg-emerald-50/30 transition-colors group">
-                    <td className="px-6 py-4">
-                      <span className="font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">#{product.code || '-'}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
-                          <Beaker className="w-4 h-4 text-emerald-600" />
-                        </div>
-                        <span className="font-semibold text-gray-800">{product.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-gray-700">{(product.price || 0).toLocaleString()}</span>
-                    </td>
-                    <td className="px-6 py-4 hidden md:table-cell">
-                      <span className="text-sm text-gray-500 line-clamp-1">{product.description || '-'}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 bg-gray-100 rounded-lg text-[10px] font-bold text-gray-500">
-                        {recipe?.items.length || 0} TA TUR
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={cn(
-                        "px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider",
-                        product.isActive ? "bg-emerald-50 text-emerald-600" : "bg-gray-50 text-gray-400"
-                      )}>
-                        {product.isActive ? 'Faol' : 'Nofaol'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button 
-                        onClick={() => openModal(product)}
-                        className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                      >
-                        <Settings2 className="w-4 h-4" />
-                      </button>
-                    </td>
+      <div className="space-y-4">
+        <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input 
+              type="text" 
+              placeholder="Mahsulotlarni qidirish..."
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all shadow-sm font-medium"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/50 border-b border-gray-100">
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider w-20">Kod</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Mahsulot nomi</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Narx</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Kategoriya</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Retsept</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Amallar</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredProducts.map((product) => {
+                    const recipe = store.getRecipe(product.id);
+                    const cat = categories.find(c => c.id === product.categoryId);
+                    return (
+                      <tr key={product.id} className="hover:bg-emerald-50/30 transition-colors group">
+                        <td className="px-6 py-4">
+                          <span className="font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded text-xs">#{product.code || '-'}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
+                              <Beaker className="w-4 h-4 text-emerald-600" />
+                            </div>
+                            <span className="font-bold text-slate-700">{product.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm font-black text-slate-800">{(product.price || 0).toLocaleString()} <span className="text-[10px] text-gray-400 uppercase">so'm</span></span>
+                        </td>
+                        <td className="px-6 py-4 hidden md:table-cell">
+                          <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">
+                            {cat?.name || 'Kategoriyasiz'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="px-2.5 py-1 bg-emerald-50 rounded-lg text-[10px] font-black text-emerald-600 uppercase tracking-tighter">
+                            {recipe?.items.length || 0} MASALLIQ
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            onClick={() => openModal(product)}
+                            className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                          >
+                            <Settings2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredProducts.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">
+                        Mahsulotlar topilmadi
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
 
       {/* Product & Recipe Modal */}
       <AnimatePresence>
@@ -217,6 +316,19 @@ export function ProductsView() {
                       value={selectedProduct?.name || ''}
                       onChange={(e) => setSelectedProduct({ ...selectedProduct!, name: e.target.value })}
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Kategoriya</label>
+                    <select 
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none font-medium"
+                      value={selectedProduct?.categoryId || ''}
+                      onChange={(e) => setSelectedProduct({ ...selectedProduct!, categoryId: e.target.value })}
+                    >
+                      <option value="">Kategoriyasiz</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1.5">Holati</label>

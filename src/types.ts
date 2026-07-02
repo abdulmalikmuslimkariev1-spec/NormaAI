@@ -26,11 +26,19 @@ export interface Ingredient {
   updatedAt: number;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: number;
+}
+
 export interface Product {
   id: string;
   code: string;
   name: string;
   price: number;
+  categoryId?: string;
   description?: string;
   isActive: boolean;
   createdAt: number;
